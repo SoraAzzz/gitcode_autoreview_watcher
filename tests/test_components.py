@@ -14,7 +14,7 @@ from review_watcher.reviewer import codex_review_args
 from review_watcher.scheduler import Scheduler
 from review_watcher.config import load_config
 from review_watcher.common import WatchError
-from test_watcher import PR, BASE, report
+from tests.test_watcher import PR, BASE, report
 
 
 class TestComponents(unittest.TestCase):

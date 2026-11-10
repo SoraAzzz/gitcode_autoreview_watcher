@@ -42,7 +42,7 @@ PR 描述展示更新：79 项离线测试通过，覆盖待确认/状态展示�
 日期：2026-09-14
 
 - Python 3.14 / Windows PowerShell：语法检查通过。
-- `python -m unittest -q test_watcher`：40 tests，全部通过。新增覆盖前台确认、非 TTY 等待、批准/拒绝状态、监听器运行中的外部批准以及模型参数透传。
+- `python -m unittest -q tests.test_watcher`：40 tests，全部通过。新增覆盖前台确认、非 TTY 等待、批准/拒绝状态、监听器运行中的外部批准以及模型参数透传。
 - `python watcher.py --check`：GitCode 与 Codex 已登录，Git 可用。
 - `python watcher.py --config smoke-config.json --discover-only`：只读访问 infra-test/gctest1 返回 CLI 退出码 4；未建立成功基线，后续 status 为 []，符合失败不推进状态预期。测试账号权限需由使用者另行处理。
 - Codex CLI 0.153.4 实际非交互冒烟：read-only、ignore-user-config、ephemeral、output-schema、output-last-message；标准客户端经历 5 次 WebSocket 超时重试后自动改用 HTTPS，退出码 0，输出 {"ok":true}。没有手动更换连接方式或提取凭证。

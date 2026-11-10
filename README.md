@@ -115,8 +115,10 @@ needs_attention 的处理：检查对应报告和远端评论。若是敏感问�
 ## 测试与本次验证
 
 ```powershell
-python -m unittest -v test_watcher
+python -m unittest discover -v
 ```
+
+测试统一放在 `tests/` 包中。单独运行某个模块可用 `python -m unittest -v tests.test_watcher`。
 
 测试覆盖首次基线、人工确认、非 TTY 等待、模型透传、旧 PR 重开、失败回滚、重启恢复、锁、重试上限、差异行定位、敏感报告拦截、过期提交拦截、发布前持久化、超时不重复发送、回读类型校验及只评审模式。
 

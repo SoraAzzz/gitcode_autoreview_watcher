@@ -20,11 +20,12 @@ $requiredFiles = @(
     'review-prompt.md',
     'review-schema.json',
     'start.ps1',
-    'test_watcher.py',
-    'test_components.py',
-    'test_console.py',
-    'test_retention.py',
-    'test_visibility.py',
+    'tests/__init__.py',
+    'tests/test_watcher.py',
+    'tests/test_components.py',
+    'tests/test_console.py',
+    'tests/test_retention.py',
+    'tests/test_visibility.py',
     'watcher.py'
 )
 $requiredFiles += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'review_watcher') -Filter '*.py' -File | ForEach-Object { 'review_watcher/' + $_.Name })
