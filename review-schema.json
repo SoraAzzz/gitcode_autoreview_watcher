@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["head_sha", "status", "summary", "limitations", "findings"],
+  "properties": {
+    "head_sha": {"type": "string"},
+    "status": {"type": "string", "enum": ["complete", "incomplete"]},
+    "summary": {"type": "string"},
+    "limitations": {"type": "string"},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["priority", "path", "line", "title", "body", "evidence", "security_sensitive"],
+        "properties": {
+          "priority": {"type": "string", "enum": ["P1", "P2"]},
+          "path": {"type": "string"},
+          "line": {"type": "integer"},
+          "title": {"type": "string"},
+          "body": {"type": "string"},
+          "evidence": {"type": "string"},
+          "security_sensitive": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

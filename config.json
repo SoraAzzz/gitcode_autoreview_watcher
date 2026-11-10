@@ -1,0 +1,21 @@
+{
+  "repo": "Ascend/msprof",
+  "poll_seconds": 300,
+  "publish": true,
+  "require_confirmation": true,
+  "state_dir": "runtime",
+  "gitcode_path": "",
+  "codex_path": "",
+  "git_path": "",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "low",
+  "git_timeout_seconds": 600,
+  "review_timeout_seconds": 1800,
+  "max_attempts": 3,
+  "max_findings": 5,
+  "max_diff_bytes": 1000000,
+  "repo_allowlist": [
+    "Ascend/msprof"
+  ],
+  "retain_pr_runs": 5
+}
