@@ -63,7 +63,7 @@ config.json 默认：
 - review_timeout_seconds：1800；git_timeout_seconds：600。
 - max_attempts：3，失败按 5/10/20 分钟退避，超过次数转 needs_attention；PR 持续更新也受重试上限约束。
 - max_findings：5，最多自动发布五条有证据的 P1/P2 问题。
-- max_diff_bytes：1000000，超过则转人工检查，不静默截断差异。
+- max_diff_bytes：2000000，超过则转人工检查，不静默截断差异。
 
 ## 工作流程
 
@@ -91,10 +91,14 @@ config.json 默认：
 ## 查看与恢复
 
 ```powershell
-# 运行中也可以查询
+# 运行中也可以查询待办
 python watcher.py --status
 
-# 监听器运行中批准或拒绝一个等待项
+# 全部开放 PR，或历史记录（默认 20 条，可指定上限）
+python watcher.py --status --all
+python watcher.py --status --history --limit 50
+
+# 监听器运行中批准一个待确认、已拒绝或 baseline 项，或拒绝一个等待项
 python watcher.py --approve-pr 123
 python watcher.py --decline-pr 123
 
@@ -107,6 +111,11 @@ python watcher.py --once
 # 停止常驻进程后，重新排队一条 needs_attention 或 reviewed_only 任务
 python watcher.py --retry-pr 123
 ```
+
+首次基线中的已有 PR 默认仍跳过。需要评审其中某条时，先用 `python watcher.py --status --all`
+查看编号，再显式执行 `python watcher.py --approve-pr 123`，或在交互终端输入 `approve 123`。
+批准后进入队列，由运行中的监听器处理；未启动监听器时需另行启动。选择其他仓库时，查询、批准和
+启动都带上 `--repo owner/repo`。`baseline` 不支持 `decline` 或 `retry`。
 
 `runtime/watcher.log` 只记任务状态和概括错误，不记录凭证或完整命令输出。`runtime/runs/<PR>-<head>-<base>/review.json` 保存模型报告，summary.json 保存最终结果及评论 ID。模型输出、源代码与评审材料可能含项目内部信息，整个 runtime 应作为本地工作资料保管，不上传或提交。
 
@@ -192,6 +201,8 @@ python watcher.py --repo your-org/your-repo --approve-pr 123
 watcher> pending
 watcher> approve 513
 watcher> status
+watcher> status --all
+watcher> status --history --limit 50
 watcher> decline 514
 watcher> retry 512
 watcher> poll
@@ -202,9 +213,11 @@ watcher> quit
 | 命令 | 含义 |
 | --- | --- |
 | `help` | 显示命令用法 |
-| `status` | 显示全部任务状态、尝试次数和已记录错误 |
+| `status` | 显示待确认、排队、执行中及需要人工处理的任务，优先显示需处理和执行中的任务 |
+| `status --all` | 显示全部开放 PR 的任务，包括基线跳过、已完成、已拒绝和仅评审 |
+| `status --history [--limit N]` | 显示历史任务，默认最多 20 条，按 PR 编号倒序；N 必须为正整数 |
 | `pending` | 显示等待确认的 PR 编号 |
-| `approve <PR>` | 确认开始评审，将待确认或已拒绝任务加入队列 |
+| `approve <PR>` | 确认开始评审，将待确认、已拒绝或 baseline 任务加入队列 |
 | `decline <PR>` | 拒绝待确认任务，不调用模型 |
 | `retry <PR>` | 重试 needs_attention 或 reviewed_only 任务，保留去重记录及已有报告缓存 |
 | `poll` | 请求后台尽快轮询；当前轮询尚未完成时等待其完成 |
@@ -214,6 +227,15 @@ watcher> quit
 `https://gitcode.com/<owner>/<repo>/pull/<编号>`。交互模式的详细 DFX 日志写入当前
 仓库状态目录的 `watcher.log`，避免刷屏；通过 `status` 查看任务处理结果。
 确认行为仍遵循 `require_confirmation` 配置，关闭该配置会自动入队。
+
+各状态视图顶部显示数量概览：开放 PR 按任务状态计数，已关闭或合入的 PR 单独计数。
+默认待办隐藏 `baseline`、`done`、`declined`、`reviewed_only`，未知状态保留展示以便诊断。
+历史视图包含这些无需继续执行的任务，以及已关闭或合入的 PR；开放 PR 的历史任务也会出现在 `--all` 中。
+历史按 PR 编号排序，不代表状态更新时间。`needs_attention` 不会因存放时间较长而自动隐藏。
+查看状态保留数据库历史及评论去重记录，不改变评审、重试或发布行为。
+
+单次查询使用 `python watcher.py --status [--all | --history [--limit N]]`，规则与交互命令一致。
+标准输出仍为 JSON 数组，数量概览写入标准错误，便于脚本继续解析 JSON。
 
 Ctrl+C 或终端输入结束也会有序退出；已有评审可能需要等到执行完成或配置超时。
 命令输错会提示并继续等待输入。当前会话固定仓库和模型，切换时退出并带 `-Repo`、
@@ -266,7 +288,8 @@ PR 成功处理后会直接在终端输出编号、页面链接、摘要、问�
 ### 批准前查看 PR 标题
 
 每次成功获取完整开放 PR 列表后，自动将已经关闭或合入的 PR 从 `pending`、交互 `status`
-和 `--status` 输出隐藏，停止这些任务的排队。数据库历史和评论去重记录仍保留。
+和 `--status` 的待办及 `--all` 输出隐藏，停止这些任务的排队；可通过 `--history` 查询。
+数据库历史和评论去重记录仍保留。
 关闭后重新打开、再次出现在开放列表中的 PR 会重新进入待确认状态，需要再次 `approve`；
 重新确认后的处理继续遵循报告缓存规则，不保证重新调用模型。正在执行的任务由现有发布前检查保护。
 网络或解析失败不修改名单。显示依据最后一次成功轮询；可输入 `poll` 请求刷新。

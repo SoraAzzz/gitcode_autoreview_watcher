@@ -45,6 +45,31 @@ class TestState(unittest.TestCase):
         self.store.discover([{'number':2,'created_at':'2099-01-01T00:00:00Z'}])
         self.store.decide(2,True)
         self.assertEqual(self.store.next_job(),2)
+    def test_baseline_requires_explicit_approval_and_survives_poll_and_restart(self):
+        prs=[{'number':1,'created_at':'2000-01-01T00:00:00Z'},
+             {'number':2,'created_at':'2000-01-01T00:00:00Z'}]
+        self.store.discover(prs,False)
+        self.assertIsNone(self.store.next_job())
+        self.assertEqual(self.store.pending_confirmations(),[])
+        self.store.decide(1,True)
+        self.store.discover(prs)
+        reopened=w.Store(self.path,'infra-test/gctest1')
+        self.assertEqual(reopened.next_job(),1)
+        self.assertEqual([item['status'] for item in reopened.summary()],['queued','baseline'])
+    def test_baseline_cannot_be_declined_or_retried(self):
+        self.store.discover([{'number':1,'created_at':'2000-01-01T00:00:00Z'}])
+        with self.assertRaises(w.WatchError): self.store.decide(1,False)
+        with self.assertRaises(w.WatchError): self.store.retry(1)
+        self.assertEqual(self.store.summary()[0]['status'],'baseline')
+        self.assertIsNone(self.store.next_job())
+    def test_approval_rejects_missing_and_ineligible_jobs(self):
+        with self.assertRaises(w.WatchError): self.store.decide(99,True)
+        self.discover()
+        for status in ('queued','running','done','closed','needs_attention','reviewed_only'):
+            with self.subTest(status=status):
+                self.store.finish(1,status)
+                with self.assertRaises(w.WatchError): self.store.decide(1,True)
+                self.assertEqual(self.store.summary()[0]['status'],status)
     def test_declined_pr_stays_out_of_queue(self):
         self.store.discover([])
         self.store.discover([{'number':2,'created_at':'2099-01-01T00:00:00Z'}])
@@ -142,15 +167,18 @@ class TestControlCommand(unittest.TestCase):
                     'max_diff_bytes':1000000}
             config_path.write_text(json.dumps(config),encoding='utf-8')
             store=w.Store(state/'state.sqlite3',config['repo'])
-            store.discover([])
-            store.discover([{'number':5,'created_at':'2099-01-01T00:00:00Z'},
+            store.discover([{'number':4,'created_at':'2000-01-01T00:00:00Z'}])
+            store.discover([{'number':4,'created_at':'2000-01-01T00:00:00Z'},
+                            {'number':5,'created_at':'2099-01-01T00:00:00Z'},
                             {'number':6,'created_at':'2099-01-01T00:00:00Z'}])
             store.decide(6,True);store.begin(6)
             with w.instance_lock(state/'watcher.lock'):
-                with patch.object(w.sys,'argv',['watcher.py','--config',str(config_path),'--approve-pr','5']):
-                    w.main()
-            self.assertEqual(store.next_job(),5)
+                for number in (4,5):
+                    with patch.object(w.sys,'argv',['watcher.py','--config',str(config_path),'--approve-pr',str(number)]):
+                        w.main()
+            self.assertEqual(store.next_job(),4)
             statuses={item['number']:item['status'] for item in store.summary()}
+            self.assertEqual(statuses[5],'queued')
             self.assertEqual(statuses[6],'running')
 
 class TestPublishing(unittest.TestCase):

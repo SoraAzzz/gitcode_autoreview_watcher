@@ -6,6 +6,7 @@ import time
 
 from .common import LOG, WatchError
 from .commands import redact
+from .status import DEFAULT_HISTORY_LIMIT, status_overview
 
 
 class Console:
@@ -95,15 +96,27 @@ class Console:
         if command in ('quit', 'exit') and not args:
             return False
         if command == 'help' and not args:
-            self.write('help | status | pending | approve <PR> | decline <PR> | '
+            self.write('help | status [--all | --history [--limit N]] | pending | approve <PR> | decline <PR> | '
                        'retry <PR> | poll | quit\n'
-                       'approve 表示确认开始评审；retry 复用已有报告缓存。'
+                       'approve 表示确认开始评审，也支持 baseline PR；retry 复用已有报告缓存。'
                        ' quit 停止调度并等待在途任务完成。')
-        elif command == 'status' and not args:
-            rows = self.watcher.store.summary(active_only=True)
-            self.write('\n\n'.join(f"#{r['number']}  {r['status']}  attempts={r['attempts']}  {r['error']}\n"
-                                 f"{self.pr_title(r['number'])}"
-                                 for r in rows) or '暂无任务。')
+        elif command == 'status':
+            view, limit = 'todo', DEFAULT_HISTORY_LIMIT
+            if args == ['--all']:
+                view = 'all'
+            elif args == ['--history']:
+                view = 'history'
+            elif (len(args) == 3 and args[:2] == ['--history', '--limit']
+                  and args[2].isdigit() and int(args[2]) > 0):
+                view, limit = 'history', int(args[2])
+            elif args:
+                raise ValueError('用法：status [--all | --history [--limit 正整数]]')
+            snapshot = self.watcher.store.status_summary(view, limit)
+            listing = '\n\n'.join(
+                f"#{r['number']}  {r['status']}  attempts={r['attempts']}  {r['error']}\n"
+                f"{self.pr_title(r['number'])}" for r in snapshot['jobs'])
+            empty = {'todo': '暂无待办任务。', 'all': '暂无开放 PR 任务。', 'history': '暂无历史任务。'}
+            self.write(status_overview(snapshot) + '\n\n' + (listing or empty[view]))
         elif command == 'pending' and not args:
             numbers = self.watcher.store.pending_confirmations()
             self.write('\n'.join(f'待确认 PR: {number}  {self.pr_title(number)}'

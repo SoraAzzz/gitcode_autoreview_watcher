@@ -10,6 +10,7 @@
 | `scheduler.py` | 主进程轮询、用户确认、单工作线程调度 |
 | `pipeline.py` | 单个 PR 的处理步骤、阶段日志、任务结果和重试决策 |
 | `state.py` | SQLite 状态转换、评论去重记录、进程锁 |
+| `status.py` | 交互及单次查询共享的只读状态视图、数量概览和历史条数限制 |
 | `gitcode.py` | GitCode CLI 的 JSON 调用封装 |
 | `workspace.py` | 获取 Git 对象、固定提交、生成 diff 和有效新增行 |
 | `reviewer.py` | Reviewer 接口、Codex 命令、提示词、缓存及结果读取 |
@@ -41,6 +42,12 @@
 运行 `python -m unittest discover -v`，覆盖原有状态、确认、去重、发布保护和 DFX，
 以及组件注入、调度与后端调用边界。测试不调用真实模型或发布远端评论。
 打包脚本收集 `review_watcher/*.py`，不收集缓存或运行记录。
+
+状态展示使用 `status.read_status()`，交互入口通过 `Store.status_summary()` 调用，
+单次 `--status` 使用只读 SQLite 连接直接调用，避免初始化存储时恢复正在执行的任务。
+默认展示待办，`--all` 展示开放 PR，`--history` 展示无需继续执行及已关闭的任务。
+历史默认限制 20 条，按 PR 编号倒序；现有表无更新时间，不将编号排序解释为处理时间排序。
+内部诊断用的 `Store.summary()` 保持原有行为。
 
 ## 非源码文件说明
 

@@ -12,6 +12,7 @@ from .common import ROOT, LOG, WatchError
 from .commands import resolve_tool, run
 from .config import load_config
 from .state import Store, instance_lock
+from .status import DEFAULT_HISTORY_LIMIT, read_status, status_overview
 from .pipeline import Watcher
 from .console import Console
 
@@ -21,9 +22,13 @@ def main():
     parser.add_argument('--config', type=Path, default=ROOT/'config.json')
     parser.add_argument('--once', action='store_true', help='Poll and drain currently eligible jobs, then exit')
     parser.add_argument('--discover-only', action='store_true', help='Poll only; never run AI or publish')
-    parser.add_argument('--status', action='store_true', help='Print persisted jobs without polling')
+    parser.add_argument('--status', action='store_true', help='Print actionable persisted jobs without polling')
+    status_view = parser.add_mutually_exclusive_group()
+    status_view.add_argument('--all', action='store_true', help='With --status: show all open PR jobs')
+    status_view.add_argument('--history', action='store_true', help='With --status: show historical jobs')
+    parser.add_argument('--limit', type=int, help='With --status --history: maximum rows (default: 20)')
     parser.add_argument('--retry-pr', type=int, help='Requeue a held job; preserve publication deduplication')
-    parser.add_argument('--approve-pr', type=int, help='Approve one awaiting/declined PR and exit')
+    parser.add_argument('--approve-pr', type=int, help='Approve one awaiting/declined/baseline PR and exit')
     parser.add_argument('--decline-pr', type=int, help='Decline one awaiting PR and exit')
     parser.add_argument('--repo', help='Select a repository from repo_allowlist')
     parser.add_argument('--model', help='Override config.json model for this process')
@@ -32,6 +37,10 @@ def main():
     mode.add_argument('--interactive', action='store_true', help='Keep accepting commands in a terminal')
     mode.add_argument('--no-interactive', action='store_true', help='Run continuous polling without a command console')
     args = parser.parse_args()
+    if (args.all or args.history or args.limit is not None) and not args.status:
+        parser.error('--all, --history and --limit require --status')
+    if args.limit is not None and (not args.history or args.limit <= 0):
+        parser.error('--limit requires --history and a positive integer')
     control = (args.once or args.discover_only or args.status or args.check or
                any(value is not None for value in (args.retry_pr, args.approve_pr, args.decline_pr)))
     if args.interactive and control:
@@ -41,16 +50,14 @@ def main():
     interactive = not control and not args.no_interactive and sys.stdin.isatty()
     config, state = load_config(args)
     if args.status:
+        view = 'all' if args.all else 'history' if args.history else 'todo'
         database = state/'state.sqlite3'
-        if not database.exists():
-            print('[]')
-            return
-        with contextlib.closing(sqlite3.connect(database.as_uri()+'?mode=ro', uri=True)) as db:
-            query = "SELECT number,status,attempts,error FROM jobs WHERE status!='closed'"
-            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pr_visibility'").fetchone():
-                query += ' AND number NOT IN (SELECT number FROM pr_visibility WHERE is_open=0)'
-            rows = db.execute(query+' ORDER BY number')
-            print(json.dumps([dict(zip(('number','status','attempts','error'), row)) for row in rows], indent=2))
+        snapshot = {'view': view, 'counts': {}, 'total': 0, 'jobs': []}
+        if database.exists():
+            with contextlib.closing(sqlite3.connect(database.as_uri()+'?mode=ro', uri=True)) as db:
+                snapshot = read_status(db, view, args.limit or DEFAULT_HISTORY_LIMIT)
+        print(status_overview(snapshot), file=sys.stderr)
+        print(json.dumps(snapshot['jobs'], indent=2))
         return
     if args.approve_pr is not None:
         Store(state/'state.sqlite3', config['repo'], recover_running=False).decide(args.approve_pr, True)

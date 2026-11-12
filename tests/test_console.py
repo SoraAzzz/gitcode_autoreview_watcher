@@ -33,6 +33,14 @@ class TestConsole(unittest.TestCase):
         self.assertTrue(self.console.poll_requested.is_set())
         self.assertFalse(self.console.execute('quit'))
 
+    def test_approve_baseline_queues_without_starting_review_in_console(self):
+        self.store.discover([{'number':4,'created_at':'2000-01-01T00:00:00Z'},
+                             {'number':5,'created_at':'2099-01-01T00:00:00Z'}])
+        self.assertTrue(self.console.execute('approve 4'))
+        self.assertEqual(self.store.next_job(),4)
+        self.watcher.gc.assert_not_called()
+        self.watcher.scheduler.serve.assert_not_called()
+
     def test_completion_displays_content_and_location(self):
         self.console.result_notice({'repository': 'infra-test/gctest1', 'number': 5,
                                     'published': True, 'comment_ids': [33], 'summary': 'Summary',

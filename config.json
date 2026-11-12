@@ -13,9 +13,13 @@
   "review_timeout_seconds": 1800,
   "max_attempts": 3,
   "max_findings": 5,
-  "max_diff_bytes": 1000000,
+  "max_diff_bytes": 2000000,
   "repo_allowlist": [
-    "Ascend/msprof"
+    "Ascend/msprof",
+    "Ascend/mspti",
+    "Ascend/msagent",
+    "Ascend/msprof-analyze",
+    "Ascend/msmonitor"
   ],
   "retain_pr_runs": 5
 }

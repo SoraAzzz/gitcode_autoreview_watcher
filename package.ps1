@@ -26,6 +26,7 @@ $requiredFiles = @(
     'tests/test_console.py',
     'tests/test_retention.py',
     'tests/test_visibility.py',
+    'tests/test_status.py',
     'watcher.py'
 )
 $requiredFiles += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'review_watcher') -Filter '*.py' -File | ForEach-Object { 'review_watcher/' + $_.Name })

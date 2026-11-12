@@ -6,6 +6,7 @@ import os
 import sqlite3
 import time
 from .common import WatchError, utcnow
+from .status import DEFAULT_HISTORY_LIMIT, read_status
 
 # SQLite 状态仓库；每次操作独立连接，可供调度线程和工作线程共同使用。
 class Store:
@@ -85,12 +86,14 @@ class Store:
                 "SELECT number FROM jobs WHERE status='awaiting_confirmation' "
                 "AND number NOT IN (SELECT number FROM pr_visibility WHERE is_open=0) ORDER BY number")]
 
-    # 只允许待确认或已拒绝任务改变批准状态，不干扰正在执行的任务。
+    # 显式批准也可选中基线 PR；拒绝仍只处理待确认或已拒绝任务。
     def decide(self, number, approved):
         with self.connect() as db:
             row = db.execute('SELECT status FROM jobs WHERE number=?', (number,)).fetchone()
-            if not row or row[0] not in ('awaiting_confirmation', 'declined'):
-                raise WatchError('Only awaiting_confirmation/declined jobs can be approved or declined')
+            allowed = ('awaiting_confirmation', 'declined', 'baseline') if approved else ('awaiting_confirmation', 'declined')
+            if not row or row[0] not in allowed:
+                action = 'approved' if approved else 'declined'
+                raise WatchError(f'Only {"/".join(allowed)} jobs can be {action}')
             status = 'queued' if approved else 'declined'
             db.execute("UPDATE jobs SET status=?,error='',due=0 WHERE number=?", (status, number))
 
@@ -143,7 +146,12 @@ class Store:
                 raise WatchError('Only needs_attention/reviewed_only jobs can be retried')
             db.execute("UPDATE jobs SET status='queued',attempts=0,due=0,error='' WHERE number=?", (number,))
 
-    # 返回任务状态摘要，供状态命令或本地诊断使用。
+    def status_summary(self, view='todo', limit=DEFAULT_HISTORY_LIMIT):
+        """Return the shared display view; preserve all durable job/post records."""
+        with self.connect() as db:
+            return read_status(db, view, limit)
+
+    # 返回原始任务摘要，供内部诊断使用；界面使用 status_summary。
     def summary(self, active_only=False):
         with self.connect() as db:
             query = 'SELECT number,status,attempts,error FROM jobs'
